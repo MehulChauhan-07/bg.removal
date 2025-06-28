@@ -8,7 +8,7 @@ const Header = () => {
         <h1 className="text-4xl xl:text-5xl font-bold 2xl:text-6xl leading-tight text-neutral-700">
           Remove the <br className="max-md:hidden" />
           <span className="bg-gradient-to-r from-violet-600 to-fuchsia-500 bg-clip-text text-transparent">
-            background
+            Background
           </span>{" "}
           from <br className="max-md:hidden" /> image for free
         </h1>
