@@ -11,24 +11,27 @@ const BgSlider = () => {
   return (
     <div className="pb-10 md:py-20 mx-2">
       {/* Title */}
-          <h1 className="mb-12 sm:mb-20 text-center text-2xl md:text-3xl lg:text-4xl mt-4 font-semibold bg-gradient-to-r from-gray-900 to-gray-400 bg-clip-text text-transparent">
+      <h1 className="mb-12 sm:mb-20 text-center text-2xl md:text-3xl lg:text-4xl mt-4 font-semibold bg-gradient-to-r from-gray-900 to-gray-400 bg-clip-text text-transparent">
         Remove Background with High <br /> Quality and Accuracy
       </h1>
 
-      <div className="relative w-full max-w-3xl m-auto rounded-xl overflow-hidden">
+      <div
+        className="relative w-full max-w-3xl m-auto rounded-xl overflow-hidden"
+        aria-label="Background Removal Preview"
+      >
         {/* Background Image Slider */}
         <img
           src={assets.image_w_bg}
           style={{ clipPath: `inset(0 ${100.2 - sliderPosition}% 0 0)` }}
-          alt=""
+          alt="Image with Background"
         />
 
         {/* Foreground Image Slider */}
         <img
-          className="absolute top-0 left-0 w-full h-full "
+          className="absolute top-0 left-0 w-full h-full"
           src={assets.image_wo_bg}
           style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }}
-          alt=""
+          alt="Image without Background"
         />
 
         {/* Slider */}
@@ -39,6 +42,7 @@ const BgSlider = () => {
           max="100"
           value={sliderPosition}
           onChange={handleSliderChange}
+          aria-label="Background Removal Slider"
         />
       </div>
     </div>
