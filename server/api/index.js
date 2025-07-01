@@ -1,17 +1,26 @@
-// /api/index.js
+// api/index.js
 const express = require("express");
 const serverless = require("serverless-http");
+const cors = require("cors");
+const connectDB = require("../config/mongodb");
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
-import cors from "cors";
-import connectDB from "../config/mongodb.js";
+// connect to DB inside an async wrapper
+(async () => {
+  try {
+    await connectDB();
+    console.log("✅ MongoDB connected");
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:", err);
+  }
+})();
 
-await connectDB();
 // Sample route
 app.get("/", (req, res) => {
-  res.send({ message: "Hello from Express on Vercel!" });
+  res.json({ message: "Hello from Express on Vercel!" });
 });
 
 module.exports.handler = serverless(app);
