@@ -1,8 +1,23 @@
 const express = require("express");
+const serverless = require("serverless-http");
+const cors = require("cors");
+const connectDB = require("../config/mongodb.js");
+
 const app = express();
+app.use(express.json());
+app.use(cors());
 
-app.get("/", (req, res) => res.send("Express on Vercel"));
+connectDB()
+  .then(() => {
+    console.log("MongoDB connected");
+  })
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+  });
 
-app.listen(3000, () => console.log("Server ready on port 3000."));
+// Sample route
+app.get("/", (req, res) => {
+  res.send({ message: "Hello from Express on Vercel!" });
+});
 
-module.exports = app;
+module.exports.handler = serverless(app);
