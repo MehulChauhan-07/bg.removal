@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 
 import cors from "cors";
-import connectDB from "./config/mongodb.js";
+import connectDB from "../config/mongodb.js";
 
 await connectDB();
 // Sample route
