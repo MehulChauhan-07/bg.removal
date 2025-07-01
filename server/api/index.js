@@ -9,14 +9,13 @@ app.use(express.json());
 app.use(cors());
 
 // connect to DB inside an async wrapper
-(async () => {
-  try {
-    await connectDB();
+connectDB()
+  .then(() => {
     console.log("✅ MongoDB connected");
-  } catch (err) {
+  })
+  .catch((err) => {
     console.error("❌ MongoDB connection failed:", err);
-  }
-})();
+  });
 
 // Sample route
 app.get("/", (req, res) => {
