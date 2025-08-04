@@ -1,13 +1,14 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(`${process.env.MONGO_URL}/bg-xremoval`);
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    return conn;
   } catch (error) {
     console.error(`Error: ${error.message}`);
-    // process.exit(1);
+    throw error;
   }
 };
 
-module.exports = connectDB;
+export default connectDB;
