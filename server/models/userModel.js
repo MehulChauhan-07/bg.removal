@@ -11,11 +11,6 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  username: {
-    type: String,
-    required: true,
-    // unique: true,
-  },
   photo: {
     type: String,
     required: true,
@@ -34,4 +29,6 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-export default mongoose.model("User", userSchema);
+const userModel = mongoose.models.user || mongoose.model("User", userSchema);
+
+export default userModel;

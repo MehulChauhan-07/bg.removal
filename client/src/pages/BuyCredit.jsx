@@ -1,6 +1,76 @@
 import React from "react";
 import { assets, plans } from "../assets/assets";
+import { useContext } from "react";
+import { AppContext } from "../context/AppContext";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@clerk/clerk-react";
+import { toast } from "react-toastify";
+import axios from "axios";
 const BuyCredit = () => {
+  const { backendUrl, loadCreditData } = useContext(AppContext);
+
+  const navigate = useNavigate();
+
+  const { getToken } = useAuth();
+
+  const initPay = async (order) => {
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: order.amount,
+      currency: order.currency,
+      name: "Background Removal",
+      description: "Purchase Credits",
+      order_id: order.id,
+      receipt: order.receipt,
+      handler: async (response) => {
+        console.log("Payment response:", response);
+
+        const token = await getToken();
+        try {
+          const { data } = await axios.post(
+            backendUrl + `/api/user/verify-payment`,
+            response,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          if (data.success) {
+            loadCreditData();
+            navigate("/");
+            toast.success("Payment verified successfully!");
+          } else {
+            toast.error("Payment verification failed.");
+          }
+        } catch (error) {
+          console.error("Error verifying payment:", error);
+        }
+      },
+    };
+
+    const razorpay = new window.Razorpay(options);
+    razorpay.open();
+  };
+
+  const paymentRazorpay = async (planID) => {
+    try {
+      const token = await getToken();
+      const { data } = await axios.post(
+        backendUrl + `/api/user/payment`,
+        { planID },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (data.success) {
+        initPay(data.order);
+      }
+    } catch (error) {
+      console.error("Payment error:", error);
+      toast.error("Payment failed. Please try again later.");
+    }
+  };
+
   return (
     <div className="min-h-[80vh] text-center pt-14 mb-10">
       <button className="border border-gray-400 px-10 py-2 rounded-full mb-6">
@@ -22,7 +92,10 @@ const BuyCredit = () => {
               <span className="text-3xl font-medium">${item.price}</span>/
               {item.credits} credits
             </p>
-            <button className="w-full bg-gray-800 text-white mt-8 text-sm rounded-md py-2.5 min-w-52">
+            <button
+              onClick={() => paymentRazorpay(item.id)}
+              className="w-full bg-gray-800 text-white mt-8 text-sm rounded-md py-2.5 min-w-52"
+            >
               Purchase
             </button>
           </div>

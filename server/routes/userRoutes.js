@@ -1,14 +1,20 @@
 import express from "express";
-import { clerkWebhook } from "../controllers/userController.js";
+import {
+  clerkWebhook,
+  makeRazorpayPayment,
+  userCredits,
+  verifyRazorpayPayment,
+} from "../controllers/userController.js";
+import userAuth from "../middlewares/auth.middleware.js";
+import userModel from "../models/userModel.js";
 
-const router = express.Router();
+const userRouter = express.Router();
 
 // Clerk webhook route
-router.post("/webhook", clerkWebhook);
+userRouter.post("/webhooks", clerkWebhook);
+userRouter.get("/credits", userAuth, userCredits);
+userRouter.get("/credit", userAuth, userCredits); // Add route that matches frontend call
+userRouter.post("/payment", userAuth, makeRazorpayPayment); // Add route that matches frontend call
+userRouter.post("/verify-payment", userAuth, verifyRazorpayPayment); // Add route that matches frontend call
 
-// Add more user routes here as needed
-// router.get("/profile", getUserProfile);
-// router.put("/profile", updateUserProfile);
-// router.get("/credits", getUserCredits);
-
-export default router;
+export default userRouter;
