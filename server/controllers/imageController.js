@@ -15,6 +15,7 @@ const removeBgImage = async (req, res) => {
             mimetype: req.file.mimetype,
             size: req.file.size,
             path: req.file.path,
+            buffer: req.file.buffer ? "Buffer exists" : "No buffer",
           }
         : "No file",
       headers: req.headers,
@@ -67,7 +68,7 @@ const removeBgImage = async (req, res) => {
       });
     }
 
-    if (!req.file || !req.file.path) {
+    if (!req.file) {
       console.log("No image file found in request");
       return res.status(400).json({
         success: false,
@@ -75,18 +76,51 @@ const removeBgImage = async (req, res) => {
       });
     }
 
-    const imagePath = req.file.path; // assuming image is uploaded and available in req.file
-    console.log("Image path:", imagePath);
+    // Check if we have a buffer (memory storage) or path (disk storage)
+    let imageBuffer;
+    if (req.file.buffer) {
+      // Memory storage - use buffer directly
+      imageBuffer = req.file.buffer;
+      console.log("Using file buffer from memory storage");
+    } else if (req.file.path) {
+      // Disk storage - read file
+      try {
+        imageBuffer = fs.readFileSync(req.file.path);
+        console.log("Read file from disk storage:", req.file.path);
+      } catch (readError) {
+        console.error("Error reading file from disk:", readError);
+        return res.status(400).json({
+          success: false,
+          error: "Error reading uploaded file",
+        });
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid file data",
+      });
+    }
 
-    // read the image file
-    const imageFile = fs.createReadStream(imagePath);
     const formData = new formdata();
-    formData.append("image_file", imageFile);
+    formData.append("image_file", imageBuffer, {
+      filename: req.file.originalname || "image.jpg",
+      contentType: req.file.mimetype,
+    });
 
     console.log(
       "Calling ClipDrop API with API key:",
       process.env.CLIPDROP_API_KEY ? "API key exists" : "API key missing"
     );
+
+    if (!process.env.CLIPDROP_API_KEY) {
+      console.error("CLIPDROP_API_KEY environment variable is missing");
+      return res.status(500).json({
+        success: false,
+        error: "Server configuration error - missing API key",
+        details: "Contact administrator",
+      });
+    }
+
     const { data } = await axios.post(
       `https://clipdrop-api.co/remove-background/v1`,
       formData,
@@ -127,6 +161,7 @@ const removeBgImage = async (req, res) => {
     if (error.code === "ENOENT") {
       console.error("File not found error:", error.path);
       return res.status(400).json({
+        success: false,
         error: "Image file not found or corrupted",
         details: error.message,
       });
@@ -139,6 +174,7 @@ const removeBgImage = async (req, res) => {
         data: error.response.data,
       });
       return res.status(500).json({
+        success: false,
         error: "Background removal service error",
         details: `API returned ${error.response.status}`,
       });
@@ -146,21 +182,14 @@ const removeBgImage = async (req, res) => {
 
     if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
       return res.status(500).json({
+        success: false,
         error: "Cannot connect to background removal service",
         details: error.message,
       });
     }
 
-    // Check for missing API key
-    if (!process.env.CLIPDROP_API_KEY) {
-      console.error("CLIPDROP_API_KEY environment variable is missing");
-      return res.status(500).json({
-        error: "Server configuration error - missing API key",
-        details: "Contact administrator",
-      });
-    }
-
     res.status(500).json({
+      success: false,
       error: "Failed to remove background. Please try again later.",
       details: error.message,
     });
