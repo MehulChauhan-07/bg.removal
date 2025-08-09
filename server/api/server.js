@@ -1,85 +1,61 @@
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
-import connectDB from "../config/mongodb.js";
-import userRouter from "../routes/userRoutes.js";
-import imageRouter from "../routes/imageRoutes.js";
+require("dotenv/config");
+const express = require("express");
+const cors = require("cors");
+const connectDB = require("../config/mongodb.js");
+const userRoutes = require("../routes/userRoutes.js");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB
-try {
-  await connectDB();
-  console.log("MongoDB Connected Successfully");
-} catch (error) {
-  console.error("MongoDB connection failed:", error);
-}
+await connectDB().catch((err) => {
+  console.error("MongoDB connection error:", err);
+});
 
-// Basic middleware
-app.use(cors());
-app.use(express.json());
-const allowedOrigins = [process.env.FRONTEND_URL];
+// Middleware
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "*",
+    credentials: true,
+  })
+);
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// CORS configuration
-if (process.env.NODE_ENV === "development") {
-  app.use(
-    cors({
-      credentials: true,
-      origin: function (origin, callback) {
-        // Allow any origin in development
-        callback(null, true);
-      },
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "X-Requested-With",
-        "X-CSRF-Token",
-      ],
-    })
-  );
-} else {
-  app.use(cors({ credentials: true, origin: allowedOrigins }));
-}
-
-// Ensure preflight requests don't 404
-app.options("*", cors());
-
-// Debug middleware to log all requests
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-// Basic routes
+// Routes
 app.get("/", (req, res) => {
-  res.json({ message: "Background Removal API Server", status: "running" });
+  res.json({
+    message: "Background Removal API Server",
+    status: "running",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 
-// Mount API routers
-app.use("/api/user", userRouter);
-app.use("/api/image", imageRouter);
+// API Routes
+app.use("/api/user", userRoutes);
+
+// Add more routes here as needed
+// app.use("/api/upload", uploadRoutes);
+// app.use("/api/payment", paymentRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    error: "Something went wrong!",
+    message:
+      process.env.NODE_ENV === "development"
+        ? err.message
+        : "Internal server error",
+  });
+});
 
 // 404 handler
 app.use("*", (req, res) => {
-  res.status(404).json({ error: "Route not found", path: req.originalUrl });
+  res.status(404).json({ error: "Route not found" });
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error("Server error:", err);
-  res.status(500).json({ error: "Internal server error" });
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
-export default app;
+module.exports = app;
