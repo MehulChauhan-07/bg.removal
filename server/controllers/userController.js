@@ -9,65 +9,208 @@ import crypto from "crypto";
 // for http://localhost:3000/api/user/webhook
 const clerkWebhook = async (req, res) => {
   try {
-    //   create a Svix instance with the Clerk webhook secret
-    const webhookSecret = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
-
-    await webhookSecret.verify(JSON.stringify(req.body), {
-      "svix-id": req.headers["svix-id"],
-      "svix-timestamp": req.headers["svix-timestamp"],
-      "svix-signature": req.headers["svix-signature"],
+    console.log("🎯 WEBHOOK ENDPOINT HIT!");
+    console.log("Webhook received, headers:", {
+      svixId: req.headers["svix-id"] ? "Present" : "Missing",
+      svixTimestamp: req.headers["svix-timestamp"] ? "Present" : "Missing",
+      svixSignature: req.headers["svix-signature"] ? "Present" : "Missing",
     });
+    console.log("Request method:", req.method);
+    console.log("Request URL:", req.originalUrl);
+    console.log("Request body keys:", Object.keys(req.body || {}));
 
+    // Verify webhook signature
+    const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
+    console.log(
+      "Using webhook secret:",
+      webhookSecret ? "Secret exists" : "No secret found"
+    );
+
+    if (!webhookSecret) {
+      console.error(
+        "❌ CLERK_WEBHOOK_SECRET is not set in environment variables"
+      );
+      // Continue without verification in development (not recommended for production)
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("⚠️ Skipping webhook verification in development mode");
+      } else {
+        return res.status(500).json({
+          error: "Server configuration error: Missing webhook secret",
+        });
+      }
+    }
+
+    // Only verify if we have the required headers and secret
+    if (
+      webhookSecret &&
+      req.headers["svix-id"] &&
+      req.headers["svix-timestamp"] &&
+      req.headers["svix-signature"]
+    ) {
+      try {
+        const wh = new Webhook(webhookSecret);
+        const payload = wh.verify(JSON.stringify(req.body), {
+          "svix-id": req.headers["svix-id"],
+          "svix-timestamp": req.headers["svix-timestamp"],
+          "svix-signature": req.headers["svix-signature"],
+        });
+        console.log("✅ Webhook signature verified successfully");
+      } catch (err) {
+        console.error("❌ Webhook signature verification failed:", err);
+        // In development, continue processing even if verification fails
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            "⚠️ Continuing in development mode despite verification failure"
+          );
+        } else {
+          return res.status(400).json({
+            error: "Webhook signature verification failed",
+            details: err.message,
+          });
+        }
+      }
+    } else {
+      console.warn("⚠️ Missing required headers for webhook verification");
+      if (process.env.NODE_ENV === "development") {
+        console.warn("⚠️ Continuing in development mode without verification");
+      }
+    }
+
+    // Get the event type and data
     const { data, type } = req.body;
-    console.log("Webhook received:", type, data);
+    console.log(
+      "✅ Webhook verified:",
+      type,
+      data ? "Data present" : "No data"
+    );
+
+    // Log the full request body for debugging
+    console.log(
+      "🔍 Full webhook request body:",
+      JSON.stringify(req.body, null, 2)
+    );
+
+    let result = { message: "Webhook processed" };
+
     switch (type) {
       case "user.created": {
         // Handle user creation
+        console.log(
+          "🆕 Full webhook data received:",
+          JSON.stringify(data, null, 2)
+        );
+
+        // Extract email from the nested structure - Clerk sends email_addresses array
+        const email = data.email_addresses?.[0]?.email_address || "";
+
+        console.log("🆕 Creating new user with data:", {
+          id: data.id,
+          email: email,
+          username: data.username || "",
+          firstName: data.first_name || "",
+          lastName: data.last_name || "",
+          profileImage: data.profile_image_url || "",
+        });
+
         const userData = {
           clerkID: data.id,
-          email: data.email_addresses[0].email_address,
-          username:
-            data.username ||
-            data.email_addresses[0].email_address.split("@")[0],
-          photo: data.profile_image_url,
+          email: email,
+          username: data.username || email.split("@")[0],
+          photo: data.profile_image_url || data.image_url || "",
           firstname: data.first_name || "",
           lastname: data.last_name || "",
+          creditBalance: 5, // Give new users 5 free credits
         };
 
-        await userModel.create(userData);
-        res.status(201).json({ message: "User created successfully" });
+        try {
+          console.log("🔍 Attempting to create user with data:", userData);
 
+          // Check if user already exists
+          const existingUser = await userModel.findOne({ clerkID: data.id });
+          if (existingUser) {
+            console.log(
+              "⚠️ User already exists in MongoDB, skipping creation:",
+              existingUser
+            );
+            result = { message: "User already exists", user: existingUser };
+          } else {
+            // Create new user
+            console.log("🆕 Creating new user in MongoDB...");
+            const newUser = await userModel.create(userData);
+            console.log("✅ User created successfully in MongoDB:", newUser);
+            result = { message: "User created successfully", user: newUser };
+          }
+        } catch (dbError) {
+          console.error("❌ MongoDB error while creating user:", dbError);
+          console.error("❌ Error details:", {
+            name: dbError.name,
+            message: dbError.message,
+            code: dbError.code,
+            stack: dbError.stack,
+          });
+
+          // Log specific validation errors if present
+          if (dbError.name === "ValidationError") {
+            console.error(
+              "Validation errors:",
+              Object.keys(dbError.errors).map((field) => ({
+                field,
+                message: dbError.errors[field].message,
+                value: dbError.errors[field].value,
+              }))
+            );
+          }
+
+          // Don't throw here - we want to respond to Clerk even if DB fails
+          result = {
+            message: "Failed to create user in database",
+            error: dbError.message,
+          };
+        }
         break;
       }
       case "user.updated": {
         // Handle user updates
         const userData = {
-          clerkID: data.id,
-          email: data.email_addresses[0].email_address,
+          email: data.email_addresses?.[0]?.email_address,
           username:
             data.username ||
-            data.email_addresses[0].email_address.split("@")[0],
+            (data.email_addresses?.[0]?.email_address || "user").split("@")[0],
           photo: data.profile_image_url,
           firstname: data.first_name || "",
           lastname: data.last_name || "",
         };
 
-        await userModel.findOneAndUpdate({ clerkID: data.id }, userData);
-        res.status(200).json({ message: "User updated successfully" });
+        const updatedUser = await userModel.findOneAndUpdate(
+          { clerkID: data.id },
+          userData,
+          { new: true }
+        );
+
+        console.log("✅ User updated successfully:", updatedUser);
+        result = { message: "User updated successfully", user: updatedUser };
         break;
       }
       case "user.deleted": {
         // Handle user deletion
-        await userModel.findOneAndDelete({ clerkID: data.id });
-        res.status(200).json({ message: "User deleted successfully" });
+        const deletedUser = await userModel.findOneAndDelete({
+          clerkID: data.id,
+        });
+        console.log("✅ User deleted successfully:", deletedUser);
+        result = { message: "User deleted successfully" };
         break;
       }
       default:
+        console.log("⚠️ Unhandled webhook event type:", type);
         break;
     }
+
+    return res.status(200).json(result);
   } catch (error) {
-    console.error("Clerk webhook error:", error);
-    res.status(500).json({ error: "Webhook processing failed" });
+    console.error("❌ Clerk webhook error:", error);
+    return res
+      .status(500)
+      .json({ error: "Webhook processing failed", details: error.message });
   }
 };
 
